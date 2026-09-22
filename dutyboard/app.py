@@ -14,6 +14,7 @@ from .desktop import deep_link, load_desktop_sessions
 from .labels import age_label, bar_title, clip, row_label  # noqa: F401  测试从这里导入
 from .panel import FloatingPanel
 from .sessions import SessionInfo, State, build_board, group_by_project, newly_done
+from .themes import theme_choices
 
 log = logging.getLogger("dutyboard")
 
@@ -87,6 +88,12 @@ class DutyBoard(rumps.App):
         self._rebuild_menu(infos, now)
         self.panel.render(infos, now, code + cowork)
 
+    def _theme_menu(self) -> rumps.MenuItem:
+        menu = rumps.MenuItem("风格")
+        for key, label in theme_choices():
+            menu.add(_theme_item(self, key, label))
+        return menu
+
     def _rebuild_menu(self, infos: tuple[SessionInfo, ...], now: datetime) -> None:
         items: list = []
         grouped = group_by_project(infos)
@@ -97,10 +104,17 @@ class DutyBoard(rumps.App):
             items.extend(rumps.MenuItem(row_label(i, now), callback=_opener(i)) for i in rows)
             items.append(None)
         items.append(rumps.MenuItem("显示 / 隐藏浮窗", callback=lambda _: self.panel.toggle_visible()))
+        items.append(self._theme_menu())
         items.append(rumps.MenuItem("刷新", callback=self.refresh))
         items.append(rumps.MenuItem("退出", callback=lambda _: rumps.quit_application()))
         self.menu.clear()
         self.menu.update(items)
+
+
+def _theme_item(self, key: str, label: str) -> rumps.MenuItem:
+    item = rumps.MenuItem(("✓ " if self.panel.theme.key == key else "    ") + label,
+                          callback=lambda _: self.panel.set_theme(key))
+    return item
 
 
 def _disabled(label: str) -> rumps.MenuItem:

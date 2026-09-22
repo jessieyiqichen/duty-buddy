@@ -58,3 +58,19 @@ CLEANUP_NEW_SESSION_LINK = "claude://code/new?prompt={prompt}&folder={folder}&so
 
 # 最后一条是用户消息、却这么久没有任何回复，说明进程只是活着、模型并没在干活
 USER_PENDING_SECONDS = 3 * 60
+
+# 风格
+THEME_KEY = "dutyboard.theme"
+DEFAULT_THEME = "hud"
+
+# 像素办公室
+PIXEL_SCALE = 2                               # 1 个像素画格子 = 几个屏幕像素
+ASSET_DIR = Path(__file__).resolve().parent / "assets"
+CHARACTER_DIR = ASSET_DIR / "characters"
+OFFICE_MAX_DESKS = 40                         # 桌子上限（够用即可，放不下靠滚动）
+OFFICE_VIEW_MAX_HEIGHT = 460                  # 浮窗里办公室最多这么高（px），再多就滚动
+CHARACTER_COUNT = 6
+SPRITE_W, SPRITE_H = 16, 32
+OFFICE_COLS = 3                               # 一行几张桌子
+OFFICE_FPS = 6
+OFFICE_SWEEP_FRAMES = 40                      # 扫地机器人跑一趟多少帧

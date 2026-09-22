@@ -26,7 +26,8 @@ class ProjectView:
 
 
 def build_projects(desktop: tuple[DesktopSession, ...], live: tuple[SessionInfo, ...],
-                   now: datetime) -> tuple[ProjectView, ...]:
+                   now: datetime, icons: dict[str, str] | None = None) -> tuple[ProjectView, ...]:
+    icons = icons or STATE_ICONS
     live_by_desktop = {i.desktop_id: i for i in live if i.desktop_id}
     cutoff = BROWSER_MAX_AGE_SECONDS
     groups: dict[str, list[Entry]] = {}
@@ -37,7 +38,7 @@ def build_projects(desktop: tuple[DesktopSession, ...], live: tuple[SessionInfo,
         age = (now - s.last_activity_at).total_seconds() if s.last_activity_at else float("inf")
         if running is None and age > cutoff:
             continue
-        icon = STATE_ICONS[running.state.value] if running else "·"
+        icon = icons[running.state.value] if running else icons.get("entry", "·")
         at = running.last_at if running and running.last_at else s.last_activity_at
         groups.setdefault(project_of(s), []).append(Entry(s.title or s.local_id[:14], icon, at, s.local_id, s.source))
     views = [_project_view(name, entries, live_by_desktop) for name, entries in groups.items()]

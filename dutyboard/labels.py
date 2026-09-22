@@ -52,8 +52,9 @@ def waited_label(at: datetime | None, now: datetime) -> str:
     return text if text in ("无记录", "刚刚") else "等了 " + text.removesuffix("前")
 
 
-def queue_row_label(info: SessionInfo, now: datetime, overdue: bool) -> str:
-    icon = "❗" if overdue else config.STATE_ICONS[info.state.value]
+def queue_row_label(info: SessionInfo, now: datetime, overdue: bool, icons: dict[str, str] | None = None) -> str:
+    icons = icons or config.STATE_ICONS
+    icon = icons.get("overdue", "❗") if overdue else icons[info.state.value]
     when = waited_label(info.last_at, now) if info.state in (State.WAITING, State.PERMISSION) else age_label(info.last_at, now)
     return f"{icon} {info.project} · {clip(info.title, config.TITLE_MAX_CHARS)} · {when}"
 
