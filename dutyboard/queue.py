@@ -1,0 +1,41 @@
+"""浮窗用的待办队列：只把需要你动手的 session 拎出来，其余压成数字。纯函数。"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from .config import OVERDUE_SECONDS, STALE_SECONDS
+from .sessions import SessionInfo, State
+
+ATTENTION_STATES = frozenset({State.WAITING, State.PERMISSION})
+
+
+@dataclass(frozen=True)
+class QueueView:
+    attention: tuple[SessionInfo, ...]   # 等你的，等最久的在前
+    others: tuple[SessionInfo, ...]      # 在跑的和闲着的（不含过期的）
+    running: int
+    idle: int
+    stale: int                           # 闲置超过 STALE_SECONDS，不计入
+
+
+def _seconds_since(info: SessionInfo, now: datetime) -> float:
+    return (now - info.last_at).total_seconds() if info.last_at else float("inf")
+
+
+def is_overdue(info: SessionInfo, now: datetime) -> bool:
+    return info.state in ATTENTION_STATES and _seconds_since(info, now) > OVERDUE_SECONDS
+
+
+def build_queue(infos: tuple[SessionInfo, ...], now: datetime) -> QueueView:
+    attention = tuple(sorted((i for i in infos if i.state in ATTENTION_STATES),
+                             key=lambda i: -_seconds_since(i, now)))
+    rest = [i for i in infos if i.state not in ATTENTION_STATES]
+    stale = [i for i in rest if i.state == State.IDLE and _seconds_since(i, now) > STALE_SECONDS]
+    others = tuple(sorted((i for i in rest if i not in stale), key=lambda i: (i.state != State.RUNNING, i.project)))
+    return QueueView(
+        attention=attention, others=others,
+        running=sum(1 for i in others if i.state == State.RUNNING),
+        idle=sum(1 for i in others if i.state == State.IDLE),
+        stale=len(stale),
+    )

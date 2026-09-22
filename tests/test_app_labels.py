@@ -1,0 +1,51 @@
+from datetime import datetime, timedelta, timezone
+
+from dutyboard import app
+from dutyboard.sessions import RunningSession, SessionInfo, State
+
+NOW = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)
+
+
+def _info(state, title="改简历", prompt="把第二段改短", entry="claude-desktop", age=90):
+    return SessionInfo(RunningSession(1, "sid", "/p/job-pilot", entry, "n", 0), state, title, prompt,
+                       NOW - timedelta(seconds=age), "job-pilot")
+
+
+def test_age_label():
+    assert app.age_label(None, NOW) == "无记录"
+    assert app.age_label(NOW - timedelta(seconds=5), NOW) == "刚刚"
+    assert app.age_label(NOW - timedelta(minutes=3), NOW) == "3 分钟前"
+    assert app.age_label(NOW - timedelta(hours=2), NOW) == "2 小时前"
+
+
+def test_row_label_includes_icon_title_prompt_and_source():
+    label = app.row_label(_info(State.WAITING), NOW)
+    assert label.startswith("🟡 改简历")
+    assert "「把第二段改短」" in label and "桌面" in label and "1 分钟前" in label
+
+
+def test_row_label_without_prompt():
+    assert "「" not in app.row_label(_info(State.RUNNING, prompt=None), NOW)
+
+
+def test_clip_truncates():
+    assert app.clip("a" * 40, 10).endswith("…") and len(app.clip("a" * 40, 10)) == 10
+
+
+def test_bar_title_prefers_waiting_count():
+    assert app.bar_title((_info(State.WAITING), _info(State.RUNNING), _info(State.PERMISSION))) == "◐ 2"
+    assert app.bar_title((_info(State.RUNNING), _info(State.IDLE))) == "● 1"
+    assert app.bar_title(()) == "◌"
+
+
+def test_queue_labels():
+    from dutyboard.labels import headline_label, queue_row_label, summary_label, waited_label
+    assert waited_label(NOW - timedelta(minutes=14), NOW) == "等了 14 分钟"
+    assert waited_label(NOW - timedelta(seconds=5), NOW) == "刚刚"
+    assert queue_row_label(_info(State.WAITING, age=840), NOW, overdue=True) == "❗ job-pilot · 改简历 · 等了 14 分钟"
+    assert queue_row_label(_info(State.RUNNING, age=90), NOW, overdue=False) == "🟢 job-pilot · 改简历 · 1 分钟前"
+    assert summary_label(4, 3, False) == "▸ 另有 4 个在跑 · 3 个闲着"
+    assert summary_label(0, 0, True) == ""
+    assert headline_label(2, 5) == "◐ 2 个等你"
+    assert headline_label(0, 4) == "● 都在跑，没人等你 · 4 个"
+    assert headline_label(0, 0) == "◌ 没有运行中的 session"

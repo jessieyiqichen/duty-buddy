@@ -1,0 +1,31 @@
+# Claude 值班表
+
+macOS 桌面浮窗 + 菜单栏小工具：一眼看到本机所有正在运行的 Claude Code session（CLI / 桌面 Code / Cowork 都算）在干嘛、谁在等你。
+
+- 桌面浮窗是**待办队列**，不是清单：只列等你的 session（等最久的在最上面，超过 10 分钟行首变 ❗），其余压成一行「▸ 另有 4 个在跑 · 3 个闲着」，点它展开；闲置超过 1 天的连数字都不算。没人等你时整个窗只剩一条「● 都在跑，没人等你」
+- 浮窗永远置顶、跨所有桌面空间，按住空白处拖，位置会记住；点标题折叠成一条；菜单栏里可以「显示 / 隐藏浮窗」
+- 菜单栏下拉仍是按项目分组的完整清单
+- 菜单栏：`◐ 2` = 两个在等你；`● 3` = 三个在跑、没人等你；`◌` = 没有运行中的 session
+- 下拉：按项目分组，每行 `状态 · 标题 · 「最后一句输入」 · 来源 · 多久前`
+  - 🟢 在跑　🟡 回完了等你　🟠 工具调用悬着 45 秒以上，可能在等你点确认　⚪ 30 分钟没动静
+- session 从「在跑」变成「等你」时弹系统通知
+- 点某一行：终端的 session 直接开 Terminal `claude --resume`；桌面 app 的先把 Claude 拉到前台
+
+## 数据来源（只读，不改任何 Claude 文件）
+
+- `~/.claude/sessions/<pid>.json`：运行中的 session 名单
+- `~/.claude/projects/*/<sessionId>.jsonl`：对话记录尾部，取标题、最后一句输入、最后一条消息的 stop_reason
+
+## 用
+
+```bash
+./run.sh          # 启动 / 重启
+pkill -f dutyboard.app   # 停
+python3 -m pytest -q tests
+```
+
+菜单栏项目太多时 macOS 会把新图标藏到刘海左边，`run.sh` 里用 `defaults write` 把它钉在靠右的位置。
+
+依赖：`pip install rumps pyobjc`。`run.sh` 里的解释器路径可以用 `DUTYBOARD_PYTHON` 环境变量覆盖。
+
+参数都在 `dutyboard/config.py`。日志在 `dutyboard.log`。
