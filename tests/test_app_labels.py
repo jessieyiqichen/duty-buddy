@@ -44,8 +44,25 @@ def test_queue_labels():
     assert waited_label(NOW - timedelta(seconds=5), NOW) == "刚刚"
     assert queue_row_label(_info(State.WAITING, age=840), NOW, overdue=True) == "❗ job-pilot · 改简历 · 等了 14 分钟"
     assert queue_row_label(_info(State.RUNNING, age=90), NOW, overdue=False) == "🟢 job-pilot · 改简历 · 1 分钟前"
-    assert summary_label(4, 3, False) == "▸ 另有 4 个在跑 · 3 个闲着"
-    assert summary_label(0, 0, True) == ""
+    assert summary_label(4, 3, False) == "▸ 另有 4 个在跑"
+    assert summary_label(0, 3, True) == ""
     assert headline_label(2, 5) == "◐ 2 个等你"
     assert headline_label(0, 4) == "● 都在跑，没人等你 · 4 个"
     assert headline_label(0, 0) == "◌ 没有运行中的 session"
+
+
+def test_jump_command_prefers_deep_link():
+    from dutyboard.sessions import RunningSession, SessionInfo
+    desk = SessionInfo(RunningSession(1, "cli-1", "/p/x", "claude-desktop", "n", 0), State.WAITING, "t", None, NOW, "x", "local_1")
+    assert app.jump_command(desk) == ["open", "claude://code/continue?session=local_1&source=dutyboard"]
+    nodesk = SessionInfo(RunningSession(1, "cli-1", "/p/x", "claude-desktop", "n", 0), State.WAITING, "t", None, NOW, "x")
+    assert app.jump_command(nodesk) == ["open", "-a", "Claude"]
+    cli = SessionInfo(RunningSession(1, "cli-1", "/p/x", "cli", "n", 0), State.WAITING, "t", None, NOW, "x")
+    cmd = app.jump_command(cli)
+    assert cmd[0] == "osascript" and "claude --resume cli-1" in cmd[2]
+
+
+def test_jump_command_for_browser_entries():
+    from dutyboard.browser import Entry
+    assert app.jump_command(Entry("t", "·", None, "local_2", "code")) == ["open", "claude://code/continue?session=local_2&source=dutyboard"]
+    assert app.jump_command(Entry("t", "·", None, "local_3", "cowork")) == ["open", "-a", "Claude"]

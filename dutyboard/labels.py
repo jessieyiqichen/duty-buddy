@@ -59,12 +59,10 @@ def queue_row_label(info: SessionInfo, now: datetime, overdue: bool) -> str:
 
 
 def summary_label(running: int, idle: int, expanded: bool) -> str:
-    parts = [f"{running} 个在跑"] if running else []
-    if idle:
-        parts.append(f"{idle} 个闲着")
-    if not parts:
+    """闲着的不占浮窗，只报在跑的。"""
+    if not running:
         return ""
-    return ("▾ 另有 " if expanded else "▸ 另有 ") + " · ".join(parts)
+    return ("▾ 另有 " if expanded else "▸ 另有 ") + f"{running} 个在跑"
 
 
 def headline_label(attention: int, running: int) -> str:

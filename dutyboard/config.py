@@ -39,3 +39,22 @@ PANEL_POSITION_KEY = "dutyboard.panel.topleft"
 # 浮窗的「待办队列」逻辑
 OVERDUE_SECONDS = 10 * 60                    # 等你超过这么久，行首加感叹号
 STALE_SECONDS = 24 * 3600                    # 闲置超过这么久的连数字都不算，那是该归档的
+
+# 桌面 app 自己的 session 元数据（标题、归档状态、桌面 id），用来做深链跳转
+DESKTOP_SESSIONS_DIR = Path.home() / "Library/Application Support/Claude/claude-code-sessions"
+DESKTOP_DEEP_LINK = "claude://code/continue?session={local_id}&source=dutyboard"
+
+# 项目浏览（浮窗底部可展开的「项目」区，替代侧边栏的按项目筛选）
+COWORK_SESSIONS_DIR = Path.home() / "Library/Application Support/Claude/local-agent-mode-sessions"
+COWORK_PROJECT_NAME = "Cowork"
+BROWSER_MAX_PER_PROJECT = 8
+BROWSER_MAX_AGE_SECONDS = 30 * 24 * 3600     # 项目区只看最近一个月有动静的会话
+
+# 清仓：列出很久没动的会话，交给一个 Claude 会话用官方接口逐个归档
+CLEANUP_STALE_SECONDS = 7 * 24 * 3600
+CLEANUP_BATCH = 15                            # 一次交多少个，深链里的提示词有长度上限
+CLEANUP_FOLDER = Path(__file__).resolve().parent.parent
+CLEANUP_NEW_SESSION_LINK = "claude://code/new?prompt={prompt}&folder={folder}&source=dutyboard"
+
+# 最后一条是用户消息、却这么久没有任何回复，说明进程只是活着、模型并没在干活
+USER_PENDING_SECONDS = 3 * 60

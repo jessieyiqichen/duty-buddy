@@ -8,7 +8,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
-from .config import IDLE_SECONDS, PERMISSION_HINT_SECONDS
+from .config import IDLE_SECONDS, PERMISSION_HINT_SECONDS, USER_PENDING_SECONDS
+from .desktop import DesktopSession
 from .transcript import TranscriptView, load_view, scan_title
 
 FINAL_STOPS = frozenset({"end_turn", "stop_sequence", "max_tokens"})
@@ -40,6 +41,7 @@ class SessionInfo:
     last_prompt: str | None
     last_at: datetime | None
     project: str
+    desktop_id: str | None = None
 
 
 def pid_alive(pid: int) -> bool:
@@ -89,6 +91,8 @@ def classify(view: TranscriptView, now: datetime) -> State:
         return State.WAITING
     if view.last_role == "assistant" and age > PERMISSION_HINT_SECONDS:
         return State.PERMISSION
+    if view.last_role == "user" and age > USER_PENDING_SECONDS:
+        return State.IDLE  # 用户消息（常是系统注入的通知）挂了很久没人接，不算在跑
     return State.RUNNING
 
 
@@ -96,17 +100,20 @@ def project_name(cwd: str) -> str:
     return Path(cwd).name or cwd
 
 
-def build_board(sessions_dir: Path, projects_dir: Path, now: datetime,
-                title_cache: dict[str, str]) -> tuple[tuple[SessionInfo, ...], dict[str, str]]:
+def build_board(sessions_dir: Path, projects_dir: Path, now: datetime, title_cache: dict[str, str],
+                desktop: dict[str, DesktopSession] | None = None,
+                ) -> tuple[tuple[SessionInfo, ...], dict[str, str]]:
     """返回 (值班表, 新的标题缓存)。缓存不原地改，返回新 dict。"""
-    infos, cache = [], dict(title_cache)
+    infos, cache, desktop = [], dict(title_cache), desktop or {}
     for session in load_running(sessions_dir):
+        desk = desktop.get(session.session_id)
         path = find_transcript(projects_dir, session.session_id)
         view = load_view(path) if path else TranscriptView(None, None, None, None, None)
-        title = _resolve_title(session, view, path, cache)
+        title = (desk.title if desk and desk.title else None) or _resolve_title(session, view, path, cache)
         cache = {**cache, session.session_id: title} if title != session.name else cache
         infos.append(SessionInfo(session, classify(view, now), title, view.last_prompt,
-                                 view.last_message_at, project_name(session.cwd)))
+                                 view.last_message_at, project_name(session.cwd),
+                                 desk.local_id if desk else None))
     return tuple(infos), cache
 
 

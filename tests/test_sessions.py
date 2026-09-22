@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from dutyboard import sessions as S
-from dutyboard.config import IDLE_SECONDS, PERMISSION_HINT_SECONDS
+from dutyboard.config import IDLE_SECONDS, PERMISSION_HINT_SECONDS, USER_PENDING_SECONDS
 from dutyboard.transcript import TranscriptView
 
 NOW = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)
@@ -22,6 +22,8 @@ def _view(role, stop=None, age=1):
     (_view("assistant", "tool_use", age=PERMISSION_HINT_SECONDS + 1), S.State.PERMISSION),
     (_view("assistant", None), S.State.RUNNING),
     (_view("user"), S.State.RUNNING),
+    (_view("user", age=USER_PENDING_SECONDS - 1), S.State.RUNNING),
+    (_view("user", age=USER_PENDING_SECONDS + 1), S.State.IDLE),
     (_view("user", age=IDLE_SECONDS + 1), S.State.IDLE),
     (TranscriptView(None, None, None, None, None), S.State.IDLE),
 ])
@@ -106,3 +108,15 @@ def test_group_by_project_sorted_with_waiting_first():
     grouped = S.group_by_project((a, b, c))
     assert list(grouped) == ["x", "y"]
     assert [i.title for i in grouped["x"]] == ["B", "A"]
+
+
+def test_build_board_uses_desktop_title_and_id(tmp_path, monkeypatch):
+    from dutyboard.desktop import DesktopSession
+    sessions_dir, projects_dir = tmp_path / "sessions", tmp_path / "projects"
+    sessions_dir.mkdir(); (projects_dir / "slug").mkdir(parents=True)
+    _write_session(sessions_dir, 10, "sid-1", "/p/x")
+    (projects_dir / "slug" / "sid-1.jsonl").write_text(json.dumps({"type": "custom-title", "customTitle": "记录里的名"}) + "\n")
+    monkeypatch.setattr(S, "pid_alive", lambda pid: True)
+    desktop = {"sid-1": DesktopSession("local_9", "sid-1", "桌面里的名", False)}
+    board, _ = S.build_board(sessions_dir, projects_dir, NOW, {}, desktop)
+    assert board[0].title == "桌面里的名" and board[0].desktop_id == "local_9"

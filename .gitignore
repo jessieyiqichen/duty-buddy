@@ -1,6 +1,4 @@
 __pycache__/
-*.py[cod]
+*.pyc
 .pytest_cache/
-*.log
-.DS_Store
-.venv/
+dutyboard.log

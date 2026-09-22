@@ -24,7 +24,7 @@ def test_attention_sorted_longest_wait_first_and_counts():
     q = build_queue(infos, NOW)
     assert [i.title for i in q.attention] == ["w-old", "perm", "w-new"]
     assert (q.running, q.idle, q.stale) == (1, 1, 1)
-    assert [i.title for i in q.others] == ["run", "idle"]
+    assert [i.title for i in q.others] == ["run"]
 
 
 def test_overdue_threshold():

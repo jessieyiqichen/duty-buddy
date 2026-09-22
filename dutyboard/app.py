@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 import rumps
 
 from . import config
+from .browser import Entry
+from .desktop import deep_link, load_desktop_sessions
 from .labels import age_label, bar_title, clip, row_label  # noqa: F401  测试从这里导入
 from .panel import FloatingPanel
 from .sessions import SessionInfo, State, build_board, group_by_project, newly_done
@@ -25,15 +27,30 @@ def notify(title: str, body: str) -> None:
         log.warning("通知发送失败: %s", exc)
 
 
-def open_session(info: SessionInfo) -> None:
-    """桌面 app 的 session 目前只能把 Claude 拉到前台；终端的直接 resume。"""
+def jump_command(info: SessionInfo | Entry) -> list[str]:
+    """纯函数：点某一行该执行什么。桌面 session 走深链直接切过去；终端的开 Terminal 恢复。"""
+    if isinstance(info, Entry):
+        return ["open", deep_link(info.desktop_id)] if info.source == "code" else ["open", "-a", "Claude"]
+    if info.desktop_id:
+        return ["open", deep_link(info.desktop_id)]
+    if info.session.entrypoint == "claude-desktop":
+        return ["open", "-a", "Claude"]
+    cmd = f"cd {shlex.quote(info.session.cwd)} && claude --resume {shlex.quote(info.session.session_id)}"
+    script = f'tell application "Terminal" to do script "{cmd}"\ntell application "Terminal" to activate'
+    return ["osascript", "-e", script]
+
+
+def open_link(url: str) -> None:
     try:
-        if info.session.entrypoint == "claude-desktop":
-            subprocess.run(["open", "-a", "Claude"], check=True, timeout=5)
-            return
-        cmd = f"cd {shlex.quote(info.session.cwd)} && claude --resume {shlex.quote(info.session.session_id)}"
-        script = f'tell application "Terminal" to do script "{cmd}"\ntell application "Terminal" to activate'
-        subprocess.run(["osascript", "-e", script], check=True, timeout=5)
+        subprocess.run(["open", url], check=True, timeout=5, capture_output=True)
+    except (subprocess.SubprocessError, OSError) as exc:
+        log.warning("打开链接失败: %s", exc)
+        rumps.alert("打不开", str(exc))
+
+
+def open_session(info: SessionInfo | Entry) -> None:
+    try:
+        subprocess.run(jump_command(info), check=True, timeout=5, capture_output=True)
     except (subprocess.SubprocessError, OSError) as exc:
         log.warning("打开 session 失败: %s", exc)
         rumps.alert("打不开这个 session", str(exc))
@@ -44,7 +61,7 @@ class DutyBoard(rumps.App):
         super().__init__(config.APP_TITLE, quit_button=None)
         self.states: dict[str, State] = {}
         self.title_cache: dict[str, str] = {}
-        self.panel = FloatingPanel.alloc().initWithOpener_(open_session)
+        self.panel = FloatingPanel.alloc().initWithOpener_linkOpener_(open_session, open_link)
         self.timer = rumps.Timer(self.refresh, config.POLL_SECONDS)
         self.timer.start()
         self.refresh(None)
@@ -52,7 +69,11 @@ class DutyBoard(rumps.App):
     def refresh(self, _sender) -> None:
         now = datetime.now(timezone.utc)
         try:
-            infos, self.title_cache = build_board(config.SESSIONS_DIR, config.PROJECTS_DIR, now, self.title_cache)
+            code = load_desktop_sessions(config.DESKTOP_SESSIONS_DIR, "code")
+            cowork = load_desktop_sessions(config.COWORK_SESSIONS_DIR, "cowork")
+            index = {s.cli_session_id: s for s in code}
+            infos, self.title_cache = build_board(config.SESSIONS_DIR, config.PROJECTS_DIR, now,
+                                                 self.title_cache, index)
         except Exception:  # 刷新失败不能让菜单栏进程死掉，记日志、下一轮再试
             log.exception("刷新值班表失败")
             self.title = "◌ !"
@@ -64,7 +85,7 @@ class DutyBoard(rumps.App):
         self.states = current
         self.title = bar_title(infos)
         self._rebuild_menu(infos, now)
-        self.panel.render(group_by_project(infos), now, self.title)
+        self.panel.render(infos, now, code + cowork)
 
     def _rebuild_menu(self, infos: tuple[SessionInfo, ...], now: datetime) -> None:
         items: list = []

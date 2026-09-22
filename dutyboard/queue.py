@@ -13,7 +13,7 @@ ATTENTION_STATES = frozenset({State.WAITING, State.PERMISSION})
 @dataclass(frozen=True)
 class QueueView:
     attention: tuple[SessionInfo, ...]   # 等你的，等最久的在前
-    others: tuple[SessionInfo, ...]      # 在跑的和闲着的（不含过期的）
+    others: tuple[SessionInfo, ...]      # 只有在跑的；闲着的不上浮窗，去「按项目找会话」里看
     running: int
     idle: int
     stale: int                           # 闲置超过 STALE_SECONDS，不计入
@@ -32,10 +32,10 @@ def build_queue(infos: tuple[SessionInfo, ...], now: datetime) -> QueueView:
                              key=lambda i: -_seconds_since(i, now)))
     rest = [i for i in infos if i.state not in ATTENTION_STATES]
     stale = [i for i in rest if i.state == State.IDLE and _seconds_since(i, now) > STALE_SECONDS]
-    others = tuple(sorted((i for i in rest if i not in stale), key=lambda i: (i.state != State.RUNNING, i.project)))
+    others = tuple(sorted((i for i in rest if i.state == State.RUNNING), key=lambda i: i.project))
     return QueueView(
         attention=attention, others=others,
         running=sum(1 for i in others if i.state == State.RUNNING),
-        idle=sum(1 for i in others if i.state == State.IDLE),
+        idle=sum(1 for i in rest if i.state == State.IDLE and i not in stale),
         stale=len(stale),
     )
