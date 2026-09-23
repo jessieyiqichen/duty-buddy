@@ -31,6 +31,7 @@ def test_groups_by_project_live_first_and_cowork_bucket():
     assert alpha.live == 1
     assert [e.title for e in alpha.entries] == ["a1", "a2"]
     assert alpha.entries[0].icon == "🟡" and alpha.entries[1].icon == "·"
+    assert alpha.entries[0].live and not alpha.entries[1].live
     assert [e.title for e in views[1].entries] == ["b1"]
     assert views[2].entries[0].title == "签证" and views[2].entries[0].source == "cowork"
 

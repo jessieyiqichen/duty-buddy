@@ -7,9 +7,9 @@ from dutyboard.sessions import RunningSession, SessionInfo, State
 NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
 
 
-def _info(sid, state, age, project="p"):
+def _info(sid, state, age, project="p", seen=False):
     return SessionInfo(RunningSession(1, sid, f"/x/{project}", "cli", sid, 0), state, sid, None,
-                       NOW - timedelta(seconds=age), project)
+                       NOW - timedelta(seconds=age), project, None, seen)
 
 
 def test_attention_sorted_longest_wait_first_and_counts():
@@ -36,3 +36,11 @@ def test_overdue_threshold():
 def test_empty():
     q = build_queue((), NOW)
     assert q.attention == () and q.others == () and (q.running, q.idle, q.stale) == (0, 0, 0)
+
+
+def test_seen_waiting_is_parked_not_attention():
+    q = build_queue((_info("w", State.WAITING, 900), _info("seen", State.WAITING, 900, seen=True),
+                     _info("p-seen", State.PERMISSION, 100, seen=True)), NOW)
+    assert [i.title for i in q.attention] == ["w"]
+    assert [i.title for i in q.parked] == ["seen", "p-seen"]
+    assert not is_overdue(_info("seen", State.WAITING, OVERDUE_SECONDS + 99, seen=True), NOW)

@@ -9,7 +9,7 @@ NOW = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
 
 
 def _e(title, icon="🟢"):
-    return Entry(title, icon, NOW - timedelta(minutes=1), "local_" + title, "code")
+    return Entry(title, icon, NOW - timedelta(minutes=1), "local_" + title, "code", live=True)
 
 
 def _scene(*projects):
@@ -44,7 +44,7 @@ def test_removed_seat_makes_actor_leave_and_vanish():
     st = sim.sync(sim.empty_state(), scene, random.Random(0))
     for _ in range(400):
         st = sim.step(st, scene, random.Random(1))
-    scene2 = _scene(ProjectView("p", 0, (Entry("a", "·", NOW, "local_a", "code"),)))
+    scene2 = _scene(ProjectView("p", 1, (Entry("b", "🟢", NOW, "local_b", "code", live=True),)))
     st = sim.sync(st, scene2, random.Random(0))
     assert st.actors["local_a"].leaving
     for _ in range(400):

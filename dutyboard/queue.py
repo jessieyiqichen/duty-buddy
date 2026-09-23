@@ -12,7 +12,8 @@ ATTENTION_STATES = frozenset({State.WAITING, State.PERMISSION})
 
 @dataclass(frozen=True)
 class QueueView:
-    attention: tuple[SessionInfo, ...]   # 等你的，等最久的在前
+    attention: tuple[SessionInfo, ...]   # 等你的（还没看过），等最久的在前
+    parked: tuple[SessionInfo, ...]      # 等你但你已经看过，搁着
     others: tuple[SessionInfo, ...]      # 只有在跑的；闲着的不上浮窗，去「按项目找会话」里看
     running: int
     idle: int
@@ -23,18 +24,22 @@ def _seconds_since(info: SessionInfo, now: datetime) -> float:
     return (now - info.last_at).total_seconds() if info.last_at else float("inf")
 
 
+def needs_attention(info: SessionInfo) -> bool:
+    return info.state in ATTENTION_STATES and not info.seen
+
+
 def is_overdue(info: SessionInfo, now: datetime) -> bool:
-    return info.state in ATTENTION_STATES and _seconds_since(info, now) > OVERDUE_SECONDS
+    return needs_attention(info) and _seconds_since(info, now) > OVERDUE_SECONDS
 
 
 def build_queue(infos: tuple[SessionInfo, ...], now: datetime) -> QueueView:
-    attention = tuple(sorted((i for i in infos if i.state in ATTENTION_STATES),
-                             key=lambda i: -_seconds_since(i, now)))
+    attention = tuple(sorted((i for i in infos if needs_attention(i)), key=lambda i: -_seconds_since(i, now)))
+    parked = tuple(sorted((i for i in infos if i.state in ATTENTION_STATES and i.seen), key=lambda i: -_seconds_since(i, now)))
     rest = [i for i in infos if i.state not in ATTENTION_STATES]
     stale = [i for i in rest if i.state == State.IDLE and _seconds_since(i, now) > STALE_SECONDS]
     others = tuple(sorted((i for i in rest if i.state == State.RUNNING), key=lambda i: i.project))
     return QueueView(
-        attention=attention, others=others,
+        attention=attention, parked=parked, others=others,
         running=sum(1 for i in others if i.state == State.RUNNING),
         idle=sum(1 for i in rest if i.state == State.IDLE and i not in stale),
         stale=len(stale),

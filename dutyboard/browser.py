@@ -16,6 +16,8 @@ class Entry:
     at: datetime | None
     desktop_id: str
     source: str
+    live: bool = False    # 进程活着
+    seen: bool = False    # 等你但看过了
 
 
 @dataclass(frozen=True)
@@ -40,7 +42,8 @@ def build_projects(desktop: tuple[DesktopSession, ...], live: tuple[SessionInfo,
             continue
         icon = icons[running.state.value] if running else icons.get("entry", "·")
         at = running.last_at if running and running.last_at else s.last_activity_at
-        groups.setdefault(project_of(s), []).append(Entry(s.title or s.local_id[:14], icon, at, s.local_id, s.source))
+        groups.setdefault(project_of(s), []).append(Entry(s.title or s.local_id[:14], icon, at, s.local_id, s.source,
+                                                          running is not None, bool(running and running.seen)))
     views = [_project_view(name, entries, live_by_desktop) for name, entries in groups.items()]
     return tuple(sorted(views, key=lambda v: (-v.live, -_latest(v))))
 

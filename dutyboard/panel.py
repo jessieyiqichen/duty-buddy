@@ -138,8 +138,8 @@ class FloatingPanel(NSObject):
         if self.theme.key == "office":
             self._render_office(queue, now)
             return
-        summary = summary_label(queue.running, queue.idle, self.show_others)
-        others = queue.others if (self.show_others and summary) else ()
+        summary = summary_label(queue.running, queue.idle, self.show_others, len(queue.parked))
+        others = (queue.others + queue.parked) if (self.show_others and summary) else ()
         self.rows = [*queue.attention, *others]
         prows = project_rows(self.projects, self.show_projects, self.opened_project) + (1 if self.stale else 0)
         height = panel_height(len(queue.attention), len(others), bool(summary), self.collapsed, prows)

@@ -13,14 +13,16 @@ from Foundation import NSTimer
 from . import config
 from .browser import Entry
 from . import sim
-from .pixel import (BOTTOM_H, BUBBLE_H, DESK_W, DESK_Y_IN_CELL, MARGIN, PERSON_H, PERSON_W, WALL_H, Bubble, Desk,
-                    Scene, Seat, layout_bubbles, pile_hit, seat_at)
+from .pixel import (AISLE_W, BOTTOM_H, BUBBLE_H, DESK_W, MARGIN, PERSON_H, PERSON_W, TABLE_Y_IN_CELL, WALL_H, Bubble,
+                    Desk, Scene, Seat, layout_bubbles, pile_hit, seat_at)
 
 log = logging.getLogger("dutyboard.office")
 S = config.PIXEL_SCALE
 SW, SH = config.SPRITE_W, config.SPRITE_H
 # 角色图：行 0 正面 / 1 背面 / 2 侧面；列 0-2 走路、3-4 打字、5-6 看书
-POSE_FRAMES = {"typing": (1, (3, 4)), "wave": (0, (0, 0)), "jump": (0, (0, 0)), "ask": (0, (0, 0)), "sleep": (0, (5, 6))}
+POSE_FRAMES = {"typing": (1, (3, 4)), "wave": (0, (0, 0)), "jump": (0, (0, 0)), "ask": (0, (0, 0)), "sleep": (0, (5, 6)),
+               "parked": (0, (5, 6))}
+NORTH_TYPING = (0, (3, 4))          # 北边的人面对桌子 = 面对我们，用正面打字帧
 WALK_ROWS = {"down": 0, "up": 1, "right": 2, "left": 2}   # left 用右侧镜像
 PET_IDLE, PET_WALK = (0, (3, 4, 5)), (2, (0, 1, 2))        # 宠物图：行 0 正面（走 3 + 站 3）、行 2 向右走
 FURNITURE = {"desk": "furniture/DESK_FRONT.png", "chair_back": "furniture/CHAIR_BACK.png",
@@ -28,6 +30,12 @@ FURNITURE = {"desk": "furniture/DESK_FRONT.png", "chair_back": "furniture/CHAIR_
              "pc_1": "furniture/PC_ON_1.png", "pc_2": "furniture/PC_ON_2.png", "pc_3": "furniture/PC_ON_3.png",
              "bin": "furniture/BIN.png", "plant": "furniture/PLANT.png", "cactus": "furniture/CACTUS.png",
              "clock": "furniture/CLOCK.png", "whiteboard": "furniture/WHITEBOARD.png",
+             "table": "furniture/TABLE_FRONT.png", "pc_back": "furniture/PC_BACK.png",
+             "bookshelf": "furniture/DOUBLE_BOOKSHELF.png", "painting": "furniture/LARGE_PAINTING.png",
+             "painting_s": "furniture/SMALL_PAINTING.png", "painting_s2": "furniture/SMALL_PAINTING_2.png",
+             "hanging": "furniture/HANGING_PLANT.png", "big_plant": "furniture/LARGE_PLANT.png",
+             "pot": "furniture/POT.png", "coffee_table": "furniture/COFFEE_TABLE.png",
+             "bench": "furniture/CUSHIONED_BENCH.png", "plant2": "furniture/PLANT_2.png",
              "floor": "floors/floor_2.png", "wall": "walls/wall_0.png", "pet": "pets/claudio.png"}
 C = {"bg": (0.11, 0.12, 0.15), "bubble": (1.0, 1.0, 1.0), "bubble_text": (0.10, 0.10, 0.12),
      "label": (0.90, 0.90, 0.95), "shadow": (0.0, 0.0, 0.0), "alert": (0.96, 0.30, 0.30), "zzz": (0.80, 0.80, 0.95)}
@@ -140,28 +148,45 @@ class OfficeView(NSView):
                 self._img("floor", tx, ty, 16, 16)
         for tx in range(0, scene.width, 16):          # 墙：图集按 4 位邻接掩码排 16 块，东西都有邻居 = 10
             self._img("wall", tx, 0, 16, WALL_H, src=(WALL_MID_X, WALL_MID_Y, 16, 32))
-        self._img("whiteboard", MARGIN + 4, 0, 32, 32)
-        self._img("clock", scene.width - MARGIN - 20, 0, 16, 32)
+        w = scene.width
+        self._img("painting", AISLE_W + 2, 0, 32, 32)
+        self._img("whiteboard", AISLE_W + 44, 0, 32, 32)
+        self._img("painting_s", AISLE_W + 84, 4, 16, 32)
+        self._img("painting_s2", AISLE_W + 102, 4, 16, 32)
+        self._img("clock", w - MARGIN - 20, 0, 16, 32)
+        self._img("hanging", w - MARGIN - 40, 2, 16, 32)
+        self._img("bookshelf", 2, WALL_H - 14, 32, 32)               # 书架靠墙立在过道口
+        self._img("plant2", w - MARGIN - 16, WALL_H - 4, 16, 32)
 
     @objc.python_method
     def _draw_desk(self, desk: Desk, moving) -> None:
+        """四人岛：北边椅子 → 方桌 → 北边显示器背面 + 南边显示器正面 → 南边椅子（人由 _draw_actor 按 y 排序画）。"""
         f = self.frame_no
         alpha = 0.45 if desk.dusty else 1.0
         x = int(sim.desk_x(desk, moving))
-        desk_y = desk.y + DESK_Y_IN_CELL
-        self._img("desk", x, desk_y, DESK_W, 32, alpha=alpha)
+        table_y = desk.y + TABLE_Y_IN_CELL
         seated = {a.seat.entry.desktop_id for a in self.sim.actors.values() if a.seat and not a.walking}
-        for slot in range(sim.pcs_visible(moving)):
+        docked = moving is None or moving.docked
+        if docked:
+            for seat in desk.seats:
+                if seat.side == "n" and not (seat.pose == "typing" and seat.entry.desktop_id in seated):
+                    self._img("chair_back", seat.x, seat.y + 2, 16, 32, alpha=alpha)
+        self._img("table", x, table_y, DESK_W, 64, alpha=alpha)
+        pcs = sim.pcs_visible(moving)
+        for slot, (dx, side) in enumerate(((4, "n"), (28, "n"), (4, "s"), (28, "s"))):
+            if slot >= pcs:
+                break
             seat = desk.seats[slot] if slot < len(desk.seats) else None
             on = seat is not None and seat.pose == "typing" and seat.entry.desktop_id in seated
-            key = f"pc_{1 + (f // 2) % 3}" if on else "pc_off"
-            self._img(key, x + slot * 16, desk_y - TOP_PC_OVERHANG, 16, 32, alpha=alpha)
-        if moving is not None and not moving.docked:
+            if side == "n":
+                self._img("pc_back", x + dx, table_y - 12, 16, 32, alpha=alpha)
+            else:
+                self._img(f"pc_{1 + (f // 2) % 3}" if on else "pc_off", x + dx, table_y + 30, 16, 32, alpha=alpha)
+        if not docked:
             return
         for seat in desk.seats:
-            if seat.pose == "typing" and seat.entry.desktop_id in seated:
-                continue                                              # 背对的人在椅背后面，椅子随人一起画
-            self._img("chair_back", seat.x, seat.y + 2, 16, 32, alpha=alpha)
+            if seat.side == "s" and not (seat.pose == "typing" and seat.entry.desktop_id in seated):
+                self._img("chair_back", seat.x, seat.y + 2, 16, 32, alpha=alpha)
         _text(desk.name[:8], desk.x + 1, desk.y + DESK_H_LABEL, 9, C["label"])
 
     @objc.python_method
@@ -170,9 +195,12 @@ class OfficeView(NSView):
             self._draw_walker(actor.skin, actor.x, actor.y, actor.facing)
             return
         seat = actor.seat
-        if seat.pose == "typing":                                     # 背对我们：椅背在人身前，挡住腿
+        if seat.pose == "typing" and seat.side == "s":                # 背对我们：椅背在人身前，挡住腿
             self._draw_person(seat, self.frame_no)
             self._img("chair_back", seat.x, seat.y + 4, 16, 32)
+        elif seat.pose == "typing":                                   # 北边打字：面对我们，椅背在身后
+            self._img("chair_back", seat.x, seat.y + 2, 16, 32)
+            self._draw_person(seat, self.frame_no)
         else:
             self._draw_person(seat, self.frame_no)
 
@@ -188,8 +216,8 @@ class OfficeView(NSView):
     def _draw_person(self, seat: Seat, f: int) -> None:
         if not self.characters:
             return
-        row, cols = POSE_FRAMES.get(seat.pose, (0, (0, 0)))
-        col = cols[(f // (3 if seat.pose == "sleep" else 1)) % len(cols)]
+        row, cols = NORTH_TYPING if (seat.pose == "typing" and seat.side == "n") else POSE_FRAMES.get(seat.pose, (0, (0, 0)))
+        col = cols[(f // (3 if seat.pose in ("sleep", "parked") else 1)) % len(cols)]
         dy = -3 if (seat.pose == "jump" and f % 2) else 0
         image = self.characters[seat.skin % len(self.characters)]
         _sprite(image, col, row, seat.x, seat.y + dy, SW, SH)
@@ -200,7 +228,13 @@ class OfficeView(NSView):
 
     @objc.python_method
     def _draw_corner(self, scene: Scene) -> None:
-        self._img("plant", MARGIN, scene.height - BOTTOM_H - 4, 16, 32)
+        """底部休息区：大盆栽、茶几和两张软凳、垃圾桶、宠物。"""
+        base = scene.height - BOTTOM_H
+        self._img("big_plant", MARGIN, base - 6, 32, 48)
+        self._img("coffee_table", AISLE_W + 44, base + 14, 32, 32)
+        self._img("bench", AISLE_W + 26, base + 26, 16, 16)
+        self._img("bench", AISLE_W + 78, base + 26, 16, 16)
+        self._img("pot", scene.pile_x - 44, base + 30, 16, 16)
         if scene.pile:
             self._img("bin", scene.pile_x, scene.pile_y, 16, 16)
             _text(f"x{scene.pile}", scene.pile_x - 22, scene.pile_y + 2, 9, C["label"])
@@ -237,7 +271,7 @@ class OfficeView(NSView):
 
 WALL_MID_X, WALL_MID_Y = 32, 64
 TOP_PC_OVERHANG = 9       # 电脑精灵底部有空白，往下压一点让键盘落在桌面上
-DESK_H_LABEL = 82         # 项目名在格子里的 y
+DESK_H_LABEL = 106        # 项目名在格子里的 y
 
 
 def _sprite(sheet: NSImage, col: int, row: int, x: int, y: int, w: int, h: int, alpha: float = 1.0) -> None:

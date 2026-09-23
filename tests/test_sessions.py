@@ -120,3 +120,17 @@ def test_build_board_uses_desktop_title_and_id(tmp_path, monkeypatch):
     desktop = {"sid-1": DesktopSession("local_9", "sid-1", "桌面里的名", False)}
     board, _ = S.build_board(sessions_dir, projects_dir, NOW, {}, desktop)
     assert board[0].title == "桌面里的名" and board[0].desktop_id == "local_9"
+
+
+def test_is_seen_rules():
+    from datetime import timedelta
+    from dutyboard.desktop import DesktopSession
+    from dutyboard.transcript import TranscriptView
+    reply_at = NOW
+    view = TranscriptView(None, None, "assistant", "end_turn", reply_at)
+    before = DesktopSession("l1", "c1", "t", False, "/p", NOW, "code", reply_at - timedelta(minutes=5))
+    after = DesktopSession("l2", "c2", "t", False, "/p", NOW, "code", reply_at + timedelta(seconds=30))
+    assert S.is_seen(before, view, front=None) is False
+    assert S.is_seen(after, view, front=None) is True
+    assert S.is_seen(before, view, front="l1") is True        # 当前开着的会话
+    assert S.is_seen(None, view, front="l1") is False

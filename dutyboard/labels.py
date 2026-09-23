@@ -54,16 +54,23 @@ def waited_label(at: datetime | None, now: datetime) -> str:
 
 def queue_row_label(info: SessionInfo, now: datetime, overdue: bool, icons: dict[str, str] | None = None) -> str:
     icons = icons or config.STATE_ICONS
-    icon = icons.get("overdue", "❗") if overdue else icons[info.state.value]
-    when = waited_label(info.last_at, now) if info.state in (State.WAITING, State.PERMISSION) else age_label(info.last_at, now)
+    parked = info.seen and info.state in (State.WAITING, State.PERMISSION)
+    icon = icons.get("parked", "📌") if parked else (icons.get("overdue", "❗") if overdue else icons[info.state.value])
+    if parked:
+        when = "看过了 · 搁置 " + age_label(info.last_at, now).removesuffix("前")
+    else:
+        when = waited_label(info.last_at, now) if info.state in (State.WAITING, State.PERMISSION) else age_label(info.last_at, now)
     return f"{icon} {info.project} · {clip(info.title, config.TITLE_MAX_CHARS)} · {when}"
 
 
-def summary_label(running: int, idle: int, expanded: bool) -> str:
-    """闲着的不占浮窗，只报在跑的。"""
-    if not running:
+def summary_label(running: int, idle: int, expanded: bool, parked: int = 0) -> str:
+    """闲着的不占浮窗，只报在跑的和看过搁着的。"""
+    parts = [f"{running} 个在跑"] if running else []
+    if parked:
+        parts.append(f"{parked} 个看过搁着")
+    if not parts:
         return ""
-    return ("▾ 另有 " if expanded else "▸ 另有 ") + f"{running} 个在跑"
+    return ("▾ 另有 " if expanded else "▸ 另有 ") + " · ".join(parts)
 
 
 def headline_label(attention: int, running: int) -> str:

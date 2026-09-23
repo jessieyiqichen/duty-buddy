@@ -18,6 +18,7 @@ class DesktopSession:
     cwd: str = ""
     last_activity_at: datetime | None = None
     source: str = "code"          # "code" | "cowork"
+    last_focused_at: datetime | None = None   # 用户最后一次把它开到前台
 
 
 def load_desktop_sessions(root: Path, source: str = "code") -> tuple[DesktopSession, ...]:
@@ -59,7 +60,7 @@ def _parse(path: Path, source: str) -> DesktopSession | None:
     title = raw.get("title") if isinstance(raw.get("title"), str) else None
     cwd = raw.get("cwd") if isinstance(raw.get("cwd"), str) else ""
     return DesktopSession(local_id, cli_id, title, bool(raw.get("isArchived")), cwd,
-                          _ms_to_dt(raw.get("lastActivityAt")), source)
+                          _ms_to_dt(raw.get("lastActivityAt")), source, _ms_to_dt(raw.get("lastFocusedAt")))
 
 
 def _ms_to_dt(raw: object) -> datetime | None:

@@ -46,6 +46,7 @@ def test_queue_labels():
     assert queue_row_label(_info(State.RUNNING, age=90), NOW, overdue=False) == "🟢 job-pilot · 改简历 · 1 分钟前"
     assert summary_label(4, 3, False) == "▸ 另有 4 个在跑"
     assert summary_label(0, 3, True) == ""
+    assert summary_label(2, 0, False, parked=1) == "▸ 另有 2 个在跑 · 1 个看过搁着"
     assert headline_label(2, 5) == "◐ 2 个等你"
     assert headline_label(0, 4) == "● 都在跑，没人等你 · 4 个"
     assert headline_label(0, 0) == "◌ 没有运行中的 session"
@@ -66,3 +67,11 @@ def test_jump_command_for_browser_entries():
     from dutyboard.browser import Entry
     assert app.jump_command(Entry("t", "·", None, "local_2", "code")) == ["open", "claude://code/continue?session=local_2&source=dutyboard"]
     assert app.jump_command(Entry("t", "·", None, "local_3", "cowork")) == ["open", "-a", "Claude"]
+
+
+def test_parked_row_label():
+    from dutyboard.labels import queue_row_label
+    from dutyboard.sessions import RunningSession, SessionInfo
+    info = SessionInfo(RunningSession(1, "s", "/p/x", "claude-desktop", "n", 0), State.WAITING, "改简历", None,
+                       NOW - timedelta(minutes=14), "x", "local_1", True)
+    assert queue_row_label(info, NOW, overdue=True) == "📌 x · 改简历 · 看过了 · 搁置 14 分钟"

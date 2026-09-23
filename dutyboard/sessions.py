@@ -42,6 +42,7 @@ class SessionInfo:
     last_at: datetime | None
     project: str
     desktop_id: str | None = None
+    seen: bool = False    # 回复落地之后用户打开过它（或它就是当前开着的会话）：看过了，别再催
 
 
 def pid_alive(pid: int) -> bool:
@@ -105,6 +106,7 @@ def build_board(sessions_dir: Path, projects_dir: Path, now: datetime, title_cac
                 ) -> tuple[tuple[SessionInfo, ...], dict[str, str]]:
     """返回 (值班表, 新的标题缓存)。缓存不原地改，返回新 dict。"""
     infos, cache, desktop = [], dict(title_cache), desktop or {}
+    front = _front_session(desktop)
     for session in load_running(sessions_dir):
         desk = desktop.get(session.session_id)
         path = find_transcript(projects_dir, session.session_id)
@@ -113,8 +115,24 @@ def build_board(sessions_dir: Path, projects_dir: Path, now: datetime, title_cac
         cache = {**cache, session.session_id: title} if title != session.name else cache
         infos.append(SessionInfo(session, classify(view, now), title, view.last_prompt,
                                  view.last_message_at, project_name(session.cwd),
-                                 desk.local_id if desk else None))
+                                 desk.local_id if desk else None, is_seen(desk, view, front)))
     return tuple(infos), cache
+
+
+def _front_session(desktop: dict[str, DesktopSession]) -> str | None:
+    """最近一次被聚焦的桌面会话，多半就是用户此刻开着的那个。"""
+    focused = [d for d in desktop.values() if d.last_focused_at is not None]
+    return max(focused, key=lambda d: d.last_focused_at).local_id if focused else None
+
+
+def is_seen(desk: DesktopSession | None, view: TranscriptView, front: str | None) -> bool:
+    if desk is None:
+        return False
+    if desk.local_id == front:
+        return True
+    if desk.last_focused_at is None or view.last_message_at is None:
+        return False
+    return desk.last_focused_at >= view.last_message_at
 
 
 def _resolve_title(session: RunningSession, view: TranscriptView, path: Path | None,

@@ -7,7 +7,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, replace
 
-from .pixel import AISLE_W, BOTTOM_H, CORRIDOR_Y, DESK_H, DESK_W, DESK_Y_IN_CELL, MARGIN, Desk, Scene, Seat
+from .pixel import AISLE_W, BOTTOM_H, CORRIDOR_Y, DESK_H, DESK_W, MARGIN, Desk, Scene, Seat
 
 SPEED = 3                 # 每帧走几格
 DESK_SPEED = 4
@@ -146,7 +146,7 @@ def _maybe_wander(actor: Actor, scene: Scene, rng: random.Random) -> Actor:
     clock = actor.wander_clock + 1
     if clock < WANDER_EVERY or rng.random() > 0.2:
         return replace(actor, wander_clock=clock)
-    plant = (float(MARGIN + 18), float(scene.height - BOTTOM_H - 2))
+    plant = (float(MARGIN + 36), float(scene.height - BOTTOM_H + 4))
     seat = (float(actor.seat.x), float(actor.seat.y))
     return replace(actor, wander_clock=0, path=route(scene, (actor.x, actor.y), plant) + route(scene, plant, seat))
 
